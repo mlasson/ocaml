@@ -122,6 +122,7 @@ libasmrunpic_OBJECTS := $(NATIVE_C_SOURCESS:.c=_npic.$(O)) \
 
 ifdef BOOTSTRAPPING_FLEXLINK
 OC_CPPFLAGS += -DBOOTSTRAPPING_FLEXLINK
+IFLEXDIR=
 endif
 
 # On Windows, OCAML_STDLIB_DIR needs to be defined dynamically

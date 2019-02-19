@@ -19,6 +19,12 @@ ROOTDIR = ..
 
 include $(ROOTDIR)/Makefile.config
 
+ifeq "$(UNIX_OR_WIN32)" "win32"
+ifeq "$(BOOTSTRAP_FLEXDLL)" "true"
+FLEXDLL_DIR="+flexdll"
+endif
+endif
+
 # SUBST generates the sed substitution for the variable *named* in $1
 # SUBST_QUOTE does the same, adding double-quotes around non-empty strings
 #   (see FLEXDLL_DIR which must empty if FLEXDLL_DIR is empty but an OCaml

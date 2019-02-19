@@ -291,18 +291,10 @@ EXTRAPATH = PATH="otherlibs/win32unix:$(PATH)"
 endif
 
 BOOT_FLEXLINK_CMD=
-
 ifeq "$(UNIX_OR_WIN32)" "win32"
-FLEXDLL_SUBMODULE_PRESENT := $(wildcard flexdll/Makefile)
-ifeq "$(FLEXDLL_SUBMODULE_PRESENT)" ""
-  BOOT_FLEXLINK_CMD =
-  FLEXDLL_DIR =
-else
+ifeq "$(BOOTSTRAP_FLEXDLL)" "true"
   BOOT_FLEXLINK_CMD = FLEXLINK_CMD="../boot/ocamlrun ../flexdll/flexlink.exe"
-  FLEXDLL_DIR = $(if $(wildcard flexdll/flexdll_*.$(O)),+flexdll)
 endif
-else
-  FLEXDLL_DIR =
 endif
 
 # The configuration file
@@ -587,9 +579,9 @@ endif
 	  $(MAKE) -C debugger install; \
 	fi
 ifeq "$(UNIX_OR_WIN32)" "win32"
-	if test -n "$(FLEXDLL_SUBMODULE_PRESENT)"; then \
-	  $(MAKE) install-flexdll; \
-	fi
+ifeq "$(BOOTSTRAP_FLEXDLL)" "true"
+	  $(MAKE) install-flexdll
+endif
 endif
 	$(INSTALL_DATA) Makefile.config "$(INSTALL_LIBDIR)/Makefile.config"
 ifeq "$(INSTALL_BYTECODE_PROGRAMS)" "true"

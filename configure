@@ -740,6 +740,7 @@ RANLIBCMD
 RANLIB
 AR
 hashbangscripts
+bootstrap_flexdll
 iflexdir
 ocamlopt_cppflags
 ocamlopt_cflags
@@ -798,7 +799,6 @@ infodir
 docdir
 oldincludedir
 includedir
-runstatedir
 localstatedir
 sharedstatedir
 sysconfdir
@@ -824,6 +824,7 @@ enable_option_checking
 enable_debug_runtime
 enable_debugger
 with_dllibs
+enable_flexdll_bootstrap
 enable_instrumented_runtime
 enable_vmthreads
 enable_systhreads
@@ -912,7 +913,6 @@ datadir='${datarootdir}'
 sysconfdir='${prefix}/etc'
 sharedstatedir='${prefix}/com'
 localstatedir='${prefix}/var'
-runstatedir='${localstatedir}/run'
 includedir='${prefix}/include'
 oldincludedir='/usr/include'
 docdir='${datarootdir}/doc/${PACKAGE_TARNAME}'
@@ -1165,15 +1165,6 @@ do
   | -silent | --silent | --silen | --sile | --sil)
     silent=yes ;;
 
-  -runstatedir | --runstatedir | --runstatedi | --runstated \
-  | --runstate | --runstat | --runsta | --runst | --runs \
-  | --run | --ru | --r)
-    ac_prev=runstatedir ;;
-  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
-  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
-  | --run=* | --ru=* | --r=*)
-    runstatedir=$ac_optarg ;;
-
   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
     ac_prev=sbindir ;;
   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
@@ -1311,7 +1302,7 @@ fi
 for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
 		datadir sysconfdir sharedstatedir localstatedir includedir \
 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
-		libdir localedir mandir runstatedir
+		libdir localedir mandir
 do
   eval ac_val=\$$ac_var
   # Remove trailing slashes.
@@ -1464,7 +1455,6 @@ Fine tuning of the installation directories:
   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
-  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
   --libdir=DIR            object code libraries [EPREFIX/lib]
   --includedir=DIR        C header files [PREFIX/include]
   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
@@ -1505,6 +1495,9 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --disable-debug-runtime do not build runtime with debugging support
   --enable-debugger       build the debugger [default=auto]
+  --enable-flexdll-bootstrap
+                          bootstrap flexdll instead of using system's version
+                          [default=auto]
   --enable-instrumented-runtime
                           build the instrumented runtime [default=auto]
   --disable-vmthreads     disable the bytecode threads library
@@ -2792,6 +2785,7 @@ VERSION=4.09.0+dev0-2019-01-18
 
 
 
+
  # TODO: rename this variable
 
 
@@ -3005,6 +2999,14 @@ else
 fi
 
 
+# Check whether --enable-flexdll-bootstrap was given.
+if test "${enable_flexdll_bootstrap+set}" = set; then :
+  enableval=$enable_flexdll_bootstrap;
+else
+  enable_flexdll_bootstrap=auto
+fi
+
+
 # Check whether --enable-instrumented-runtime was given.
 if test "${enable_instrumented_runtime+set}" = set; then :
   enableval=$enable_instrumented_runtime;
@@ -3213,6 +3215,48 @@ else
 fi
 else
   with_camltex="true"
+fi
+
+if test x"$enable_flexdll_bootstrap" = "xauto"; then :
+  if test -f "flexdll/Makefile"; then :
+  enable_flexdll_bootstrap="yes"
+else
+  enable_flexdll_bootstrap="no"
+fi
+fi
+
+# CONFIGURE IFLEXDIR
+
+bootstrap_flexdll="false"
+case $host in #(
+  *-*-cygwin*) :
+    flexlink_available=true; flexlink_mandatory=false ;; #(
+  *-*-mingw32) :
+    flexlink_available=true; flexlink_mandatory=true ;; #(
+  *-pc-windows) :
+    flexlink_available=true; flexlink_mandatory=true ;; #(
+  *) :
+    flexlink_available=false ;;
+esac
+if $flexlink_available; then :
+  if test x"$enable_flexdll_bootstrap" = "xyes"; then :
+  flexdir='$(ROOTDIR)/flexdll'
+else
+  flexdir=`flexlink -where | tr -d '\015'`
+
+fi
+  if test -z "$flexdir"; then :
+  if $flexlink_mandatory; then :
+  as_fn_error $? "Cannot find flexlink in the path. Please install flexdll or use --enable-flexdll-bootstrap." "$LINENO" 5
+
+fi
+    iflexdir=""
+else
+  iflexdir="-I\"$flexdir\""
+    bootstrap_flexdll="true"
+
+fi
+
 fi
 
 # Initialization of libtool
@@ -12540,28 +12584,26 @@ case $CC,$host in #(
   *,*-*-haiku*) :
     mathlib="" ;; #(
   *,*-*-cygwin*) :
-    case $target in #(
-  i686-*) :
-    flavor=cygwin ;; #(
-  x86_64-*) :
-    flavor=cygwin64 ;; #(
-  *) :
-    as_fn_error $? "unknown cygwin variant" "$LINENO" 5 ;;
-esac
     common_cppflags="$common_cppflags -U_WIN32"
     if $with_sharedlibs; then :
-  flexlink="flexlink -chain $flavor -merge-manifest -stack 16777216"
-      flexdir=`$flexlink -where | tr -d '\015'`
-      if test -z "$flexdir"; then :
+  if test -z "$iflexdir"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: flexlink not found: native shared libraries won't be available.
         " >&5
 $as_echo "$as_me: WARNING: flexlink not found: native shared libraries won't be available.
         " >&2;}
         with_sharedlibs=false
 else
-  iflexdir="-I\"$flexdir\""
-        mkexe="$flexlink -exe"
-        mkexedebugflag="-link -g"
+  case $target in #(
+  i686-*) :
+    flavor=cygwin ;; #(
+  x86_64-*) :
+    flavor=cygwin64 ;; #(
+  *) :
+     ;;
+esac
+         flexlink="flexlink -chain $flavor -merge-manifest -stack 16777216"
+         mkexe="flexlink -exe"
+         mkexedebugflag="-link -g"
 
 fi
 
@@ -12574,21 +12616,7 @@ fi
     ostype="Cygwin" ;; #(
   *,*-*-mingw32) :
     if $with_sharedlibs; then :
-  case $host in #(
-  i686-*-*) :
-    flexdll_chain="mingw" ;; #(
-  x86_64-*-*) :
-    flexdll_chain="mingw64" ;; #(
-  *) :
-     ;;
-esac
-      flexlink="flexlink -chain $flexdll_chain -merge-manifest -stack 16777216"
-      flexdir=`$flexlink -where | tr -d '\015'`
-      if test -z "$flexdir"; then :
-  flexdir='$(ROOTDIR)/flexdll'
-fi
-      iflexdir="-I\"$flexdir\""
-      mkexedebugflag="-link -g"
+  mkexedebugflag="-link -g"
 fi
     ostype="Win32"
     toolchain="mingw"
@@ -12600,22 +12628,8 @@ fi
     ostype="Win32"
     mkexe='$(MKEXE_ANSI) $(if $(OC_LDFLAGS),-link "$(OC_LDFLAGS)")'
     oc_ldflags='/ENTRY:wmainCRTStartup'
-    case $host in #(
-  i686-pc-windows) :
-    flexdll_chain=msvc ;; #(
-  x86_64-pc-windows) :
-    flexdll_chain=msvc64 ;; #(
-  *) :
-     ;;
-esac
     if $with_sharedlibs; then :
-  flexlink="flexlink -chain $flexdll_chain -merge-manifest -stack 16777216"
-      flexdir=`$flexlink -where | tr -d '\015'`
-      if test -z "$flexdir"; then :
-  flexdir='$(ROOTDIR)/flexdll'
-fi
-      iflexdir="-I\"$flexdir\""
-      mkexedebugflag="-link -g"
+  mkexedebugflag="-link -g"
 fi ;; #(
   *,x86_64-*-linux*) :
     $as_echo "#define HAS_ARCH_CODE32 1" >>confdefs.h

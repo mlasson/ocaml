@@ -109,6 +109,7 @@ AC_SUBST([ocamlc_cppflags])
 AC_SUBST([ocamlopt_cflags])
 AC_SUBST([ocamlopt_cppflags])
 AC_SUBST([iflexdir])
+AC_SUBST([bootstrap_flexdll])
 AC_SUBST([hashbangscripts])
 AC_SUBST([AR])
 AC_SUBST([RANLIB])
@@ -215,6 +216,12 @@ AC_ARG_WITH([dllibs],
     [use LIBS (in addition to dl) to load dynamic libs @<:@default=""@:>@])],
   [otherdllibs=$withval],
   [otherdllibs=""])
+
+AC_ARG_ENABLE([flexdll-bootstrap],
+  [AS_HELP_STRING([--enable-flexdll-bootstrap],
+    [bootstrap flexdll instead of using system's version @<:@default=auto@:>@])],
+  [],
+  [enable_flexdll_bootstrap=auto])
 
 AC_ARG_ENABLE([instrumented-runtime],
   [AS_HELP_STRING([--enable-instrumented-runtime],
@@ -360,6 +367,35 @@ AS_IF([test x"$enable_unix_lib" = "xno" -o x"$enable_str_lib" = "xno"],
     [enable_ocamldoc="no"
      with_camltex=""])],
   [with_camltex="true"])
+
+AS_IF([test x"$enable_flexdll_bootstrap" = "xauto"],
+  [AS_IF([test -f "flexdll/Makefile"],
+    [enable_flexdll_bootstrap="yes"],
+    [enable_flexdll_bootstrap="no"])])
+
+# CONFIGURE IFLEXDIR
+
+bootstrap_flexdll="false"
+AS_CASE([$host],
+  [*-*-cygwin*], [flexlink_available=true; flexlink_mandatory=false],
+  [*-*-mingw32], [flexlink_available=true; flexlink_mandatory=true],
+  [*-pc-windows], [flexlink_available=true; flexlink_mandatory=true],
+  [flexlink_available=false])
+AS_IF([$flexlink_available],
+  [AS_IF([test x"$enable_flexdll_bootstrap" = "xyes"],
+     [flexdir='$(ROOTDIR)/flexdll'],
+     [flexdir=`flexlink -where | tr -d '\015'`]
+  )
+  AS_IF([test -z "$flexdir"],
+    [AS_IF(
+      [$flexlink_mandatory],
+      [AC_MSG_ERROR([Cannot find flexlink in the path. Please install flexdll or use --enable-flexdll-bootstrap.])]
+    )
+    iflexdir=""],
+    [iflexdir="-I\"$flexdir\""
+    bootstrap_flexdll="true"]
+  )]
+)
 
 # Initialization of libtool
 # Allow the MSVC linker to be found even if ld isn't installed.
@@ -554,22 +590,19 @@ AS_CASE([$CC,$host],
     AC_DEFINE([HAS_ARCH_CODE32], [1])],
   [*,*-*-haiku*], [mathlib=""],
   [*,*-*-cygwin*],
-    [AS_CASE([$target],
-      [i686-*], [flavor=cygwin],
-      [x86_64-*], [flavor=cygwin64],
-      [AC_MSG_ERROR([unknown cygwin variant])])
-    common_cppflags="$common_cppflags -U_WIN32"
+    [common_cppflags="$common_cppflags -U_WIN32"
     AS_IF([$with_sharedlibs],
-      [flexlink="flexlink -chain $flavor -merge-manifest -stack 16777216"
-      flexdir=`$flexlink -where | tr -d '\015'`
-      AS_IF([test -z "$flexdir"],
+      [AS_IF([test -z "$iflexdir"],
         [AC_MSG_WARN(
           [flexlink not found: native shared libraries won't be available.]
         )
         with_sharedlibs=false],
-        [iflexdir="-I\"$flexdir\""
-        mkexe="$flexlink -exe"
-        mkexedebugflag="-link -g"]
+        [AS_CASE([$target],
+          [i686-*], [flavor=cygwin],
+          [x86_64-*], [flavor=cygwin64])
+         flexlink="flexlink -chain $flavor -merge-manifest -stack 16777216"
+         mkexe="flexlink -exe"
+         mkexedebugflag="-link -g"]
       )]
     )
     AS_IF([! $with_sharedlibs],
@@ -578,15 +611,7 @@ AS_CASE([$CC,$host],
     )
     ostype="Cygwin"],
   [*,*-*-mingw32],
-    [AS_IF([$with_sharedlibs],
-      [AS_CASE([$host],
-        [i686-*-*], [flexdll_chain="mingw"],
-        [x86_64-*-*], [flexdll_chain="mingw64"])
-      flexlink="flexlink -chain $flexdll_chain -merge-manifest -stack 16777216"
-      flexdir=`$flexlink -where | tr -d '\015'`
-      AS_IF([test -z "$flexdir"], [flexdir='$(ROOTDIR)/flexdll'])
-      iflexdir="-I\"$flexdir\""
-      mkexedebugflag="-link -g"])
+    [AS_IF([$with_sharedlibs], [mkexedebugflag="-link -g"])
     ostype="Win32"
     toolchain="mingw"
     mkexe='$(MKEXE_ANSI) $(if $(OC_LDFLAGS),-link "$(OC_LDFLAGS)")'
@@ -597,15 +622,7 @@ AS_CASE([$CC,$host],
     ostype="Win32"
     mkexe='$(MKEXE_ANSI) $(if $(OC_LDFLAGS),-link "$(OC_LDFLAGS)")'
     oc_ldflags='/ENTRY:wmainCRTStartup'
-    AS_CASE([$host],
-      [i686-pc-windows], [flexdll_chain=msvc],
-      [x86_64-pc-windows], [flexdll_chain=msvc64])
-    AS_IF([$with_sharedlibs],
-      [flexlink="flexlink -chain $flexdll_chain -merge-manifest -stack 16777216"
-      flexdir=`$flexlink -where | tr -d '\015'`
-      AS_IF([test -z "$flexdir"], [flexdir='$(ROOTDIR)/flexdll'])
-      iflexdir="-I\"$flexdir\""
-      mkexedebugflag="-link -g"])],
+    AS_IF([$with_sharedlibs],[mkexedebugflag="-link -g"])],
   [*,x86_64-*-linux*],
     AC_DEFINE([HAS_ARCH_CODE32], [1])
 )
